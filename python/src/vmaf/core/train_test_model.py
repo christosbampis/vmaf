@@ -10,7 +10,7 @@ from vmaf import svmutil
 from vmaf.tools.misc import indices
 from vmaf.core.mixin import TypeVersionEnabled
 from vmaf.core.perf_metric import RmsePerfMetric, SrccPerfMetric, PccPerfMetric, \
-    KendallPerfMetric, KflkPerfMetric
+    KendallPerfMetric, KflkPerfMetric, WorstDistancePerfMetric
 
 __copyright__ = "Copyright 2016-2017, Netflix, Inc."
 __license__ = "Apache, Version 2.0"
@@ -40,10 +40,15 @@ class RegressorMixin(object):
         kendall = KendallPerfMetric(ys_label, ys_label_pred) \
             .evaluate(enable_mapping=True)['score']
 
+        # worst performer
+        worst_perf = WorstDistancePerfMetric(ys_label, ys_label_pred) \
+            .evaluate(enable_mapping=True)['score']
+
         stats = {'RMSE': rmse,
                  'SRCC': srcc,
                  'PCC': pcc,
                  'KENDALL': kendall,
+                 'WORSTPERF': worst_perf,
                  'ys_label': list(ys_label),
                  'ys_label_pred': list(ys_label_pred)}
 
@@ -64,11 +69,11 @@ class RegressorMixin(object):
             return '(Invalid Stats)'
         else:
             if 'KFLK' in stats:
-                return '(SRCC: {srcc:.3f}, PCC: {pcc:.3f}, KFLK: {kflk:.3f})'. \
-                    format(srcc=stats['SRCC'], pcc=stats['PCC'], rmse=stats['RMSE'], kflk=stats['KFLK'])
+                return '(SRCC: {srcc:.3f}, PCC: {pcc:.3f}, KFLK: {kflk:.3f}, WPRF: {wprf:.3f})'. \
+                    format(srcc=stats['SRCC'], pcc=stats['PCC'], rmse=stats['RMSE'], wprf=stats['WORSTPERF'])
             else:
-                return '(SRCC: {srcc:.3f}, PCC: {pcc:.3f}, RMSE: {rmse:.3f})'. \
-                    format(srcc=stats['SRCC'], pcc=stats['PCC'], rmse=stats['RMSE'])
+                return '(SRCC: {srcc:.3f}, PCC: {pcc:.3f}, RMSE: {rmse:.3f}, WPRF: {wprf:.3f})'. \
+                    format(srcc=stats['SRCC'], pcc=stats['PCC'], rmse=stats['RMSE'], wprf=stats['WORSTPERF'])
 
     @staticmethod
     def format_stats2(stats):
@@ -123,6 +128,8 @@ class RegressorMixin(object):
             return result['KENDALL']
         elif type == 'RMSE':
             return -result['RMSE']
+        elif type == 'WORSTPERF':
+            return result['WORSTPERF']
         else:
             assert False, 'Unknow type: {} for get_objective_score().'.format(type)
 
