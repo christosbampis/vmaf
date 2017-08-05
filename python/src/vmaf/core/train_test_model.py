@@ -70,7 +70,7 @@ class RegressorMixin(object):
         else:
             if 'KFLK' in stats:
                 return '(SRCC: {srcc:.3f}, PCC: {pcc:.3f}, KFLK: {kflk:.3f}, WPRF: {wprf:.3f})'. \
-                    format(srcc=stats['SRCC'], pcc=stats['PCC'], rmse=stats['RMSE'], wprf=stats['WORSTPERF'])
+                    format(srcc=stats['SRCC'], pcc=stats['PCC'], kflk=stats['KFLK'], wprf=stats['WORSTPERF'])
             else:
                 return '(SRCC: {srcc:.3f}, PCC: {pcc:.3f}, RMSE: {rmse:.3f}, WPRF: {wprf:.3f})'. \
                     format(srcc=stats['SRCC'], pcc=stats['PCC'], rmse=stats['RMSE'], wprf=stats['WORSTPERF'])
