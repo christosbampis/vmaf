@@ -361,6 +361,23 @@ class TrainTestModel(TypeVersionEnabled):
 
         return train_test_model
 
+    def create_train_data(self, xys):
+
+        feature_names = self.get_ordered_feature_names(xys)
+
+        # note that feature_names is property (write). below cannot yet use
+        # self.feature_names since additional things (_assert_trained()) is
+        # not ready yet
+        xys_2d = self._to_tabular_xys(feature_names, xys)
+
+        # calculate normalization parameters,
+        self._calculate_normalization_params(xys_2d)
+
+        # normalize
+        xys_2d = self._normalize_xys(xys_2d)
+
+        return xys_2d, feature_names
+
     def train(self, xys):
 
         self.model_type = self.TYPE
