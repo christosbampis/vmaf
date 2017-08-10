@@ -68,10 +68,11 @@ class Asset(WorkdirEnabled):
         # if YUV is notyuv, then ref/dis width and height should not be given,
         # since it must be encoded video and the information should be already
         # in included in the header of the video files
-        if self.ref_yuv_type == 'notyuv':
-            assert self.ref_width_height is None, 'For ref_yuv_type nonyuv, ref_width_height must NOT be specified.'
-        if self.dis_yuv_type == 'notyuv':
-            assert self.dis_width_height is None, 'For dis_yuv_type nonyuv, dis_width_height must NOT be specified.'
+        1
+        # if self.ref_yuv_type == 'notyuv':
+        #     assert self.ref_width_height is None, 'For ref_yuv_type nonyuv, ref_width_height must NOT be specified.'
+        # if self.dis_yuv_type == 'notyuv':
+        #     assert self.dis_width_height is None, 'For dis_yuv_type nonyuv, dis_width_height must NOT be specified.'
 
     def copy(self, **kwargs):
         new_asset_dict = copy.deepcopy(self.asset_dict)
