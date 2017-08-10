@@ -11,6 +11,7 @@ from vmaf.tools.misc import indices
 from vmaf.core.mixin import TypeVersionEnabled
 from vmaf.core.perf_metric import RmsePerfMetric, SrccPerfMetric, PccPerfMetric, \
     KendallPerfMetric, KflkPerfMetric, WorstDistancePerfMetric
+from vmaf.tools.stats import ListStats
 
 __copyright__ = "Copyright 2016-2017, Netflix, Inc."
 __license__ = "Apache, Version 2.0"
@@ -497,7 +498,20 @@ class TrainTestModel(TypeVersionEnabled):
 
     def normalize_xs(self, xs_2d):
         if self.norm_type == 'linear_rescale':
-            xs_2d = self.slopes[1:] * xs_2d + self.intercepts[1:]
+            try:
+                xs_2d = self.slopes[1:] * xs_2d + self.intercepts[1:]
+            except TypeError:
+                # for some reason got none for a frame and a feature (SpEED related issue), hacky way of replacing by future or past values by averaging the last ko frames
+                # also check if this happens > 1% of the times for this particular asset; produce assertion error if it does
+                none_cnt = 0
+                ko = 5
+                for i in range(xs_2d.shape[0]):
+                    for j in range(xs_2d.shape[1]):
+                        if xs_2d[i][j] is None:
+                            xs_2d[i][j] = ListStats.nonemean(xs_2d[i - ko : i, j]) if i > ko else ListStats.nonemean(xs_2d[i : i + ko, j])
+                total_size = xs_2d.shape[0] * xs_2d.shape[1]
+                assert none_cnt * 100 < total_size
+                xs_2d = self.slopes[1:] * xs_2d + self.intercepts[1:]
         elif self.norm_type == 'none':
             pass
         else:
