@@ -42,8 +42,12 @@ class RegressorMixin(object):
             .evaluate(enable_mapping=True)['score']
 
         # worst performer
-        worst_perf = WorstDistancePerfMetric(ys_label, ys_label_pred) \
-            .evaluate(enable_mapping=True)['score']
+        result_wperf = WorstDistancePerfMetric(ys_label, ys_label_pred) \
+            .evaluate(enable_mapping=True)
+        worst_perf = result_wperf['score']
+
+        ys_label_after_sigmoid_adjust = result_wperf['ys_label_after_sigmoid_adjust']
+        ys_label_pred_after_sigmoid_adjust = result_wperf['ys_label_pred_after_sigmoid_adjust']
 
         stats = {'RMSE': rmse,
                  'SRCC': srcc,
@@ -51,7 +55,11 @@ class RegressorMixin(object):
                  'KENDALL': kendall,
                  'WORSTPERF': worst_perf,
                  'ys_label': list(ys_label),
-                 'ys_label_pred': list(ys_label_pred)}
+                 'ys_label_pred': list(ys_label_pred),
+                 'slope_transform': result_wperf['slope_transform'],
+                 'intercept_transform': result_wperf['intercept_transform'],
+                 'ys_label_after_sigmoid_adjust': ys_label_after_sigmoid_adjust,
+                 'ys_label_pred_after_sigmoid_adjust': ys_label_pred_after_sigmoid_adjust}
 
         if ys_label_raw is not None:
             try:
@@ -837,6 +845,44 @@ class SklearnExtraTreesTrainTestModel(TrainTestModel, RegressorMixin):
 
         from sklearn import ensemble
         model = ensemble.ExtraTreesRegressor(
+            **model_param_
+        )
+        model.fit(xys_2d[:, 1:], np.ravel(xys_2d[:, 0]))
+
+        return model
+
+    @classmethod
+    def _predict(cls, model, xs_2d):
+        # directly call sklearn's model's predict() function
+        ys_label_pred = model.predict(xs_2d)
+        return ys_label_pred
+
+class SklearnAdaBoostTrainTestModel(TrainTestModel, RegressorMixin):
+
+    TYPE = 'ADABOOST'
+    VERSION = "0.1"
+
+    @classmethod
+    def _train(cls, model_param, xys_2d):
+        """
+        adaboost
+        http://scikit-learn.org/stable/modules/generated/sklearn.ensemble.AdaBoostRegressor.html
+        :param model_param:
+        :param xys_2d:
+        :return:
+        """
+        model_param_ = model_param.copy()
+
+        # remove keys unassociated with sklearn
+        if 'norm_type' in model_param_:
+            del model_param_['norm_type']
+        if 'score_clip' in model_param_:
+            del model_param_['score_clip']
+        if 'custom_clip_0to1_map' in model_param_:
+            del model_param_['custom_clip_0to1_map']
+
+        from sklearn import ensemble
+        model = ensemble.AdaBoostRegressor(
             **model_param_
         )
         model.fit(xys_2d[:, 1:], np.ravel(xys_2d[:, 0]))

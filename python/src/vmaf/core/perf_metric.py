@@ -49,6 +49,8 @@ class PerfMetric(TypeVersionEnabled):
         """
         groundtruths, predictions = self._preprocess(self.groundtruths, self.predictions, **kwargs)
         result = self._evaluate(groundtruths, predictions, **kwargs)
+        result['ys_label_after_sigmoid'] = groundtruths
+        result['ys_label_pred_after_sigmoid'] = predictions
         assert 'score' in result
         return result
 
@@ -439,14 +441,19 @@ class WorstDistancePerfMetric(AggrScorePerfMetric):
 
     @classmethod
     def _evaluate(cls, groundtruths, predictions, **kwargs):
-        # fit a straight llne between objective and subjective scores, calculate the distances from the line and average the 5% worst (largest) ones
+        # fit a straight line between objective and subjective scores, calculate the distances from the line and average the 5% worst (largest) ones
 
-        z = np.polyfit(np.array(groundtruths), np.array(predictions), 1)
+        # z = np.polyfit(np.array(groundtruths), np.array(predictions), 1)
+        # slope_transform = z[0]
+        # intercept_transform = z[1]
+
+        A = np.vstack([groundtruths, np.ones(len(groundtruths))]).T
+        slope_transform, intercept_transform = np.linalg.lstsq(A, predictions)[0]
 
         p1_x = 0
-        p1_y = z[0]*p1_x + z[1]
+        p1_y = slope_transform * p1_x + intercept_transform
         p2_x = 1
-        p2_y = z[0]*p2_x + z[1]
+        p2_y = slope_transform * p2_x + intercept_transform
         p1 = np.array([p1_x, p1_y])
         p2 = np.array([p2_x, p2_y])
         worst_ds_perpendicular = []
@@ -456,20 +463,11 @@ class WorstDistancePerfMetric(AggrScorePerfMetric):
         for gt, pred in zip(groundtruths, predictions):
             p3 = np.array([gt, pred])
             worst_ds_perpendicular.append(norm(np.cross(p2 - p1, p1 - p3)) / norm(p2 - p1))
-            worst_ds_vertical.append(np.abs(z[0]*p3[0] + z[1] - p3[1]))
+            worst_ds_vertical.append(np.abs(slope_transform * p3[0] + intercept_transform - p3[1]))
 
         woperf_perpendicular = np.mean(np.sort(worst_ds_perpendicular)[::-1][0:np.int(len(groundtruths) * perc / float(100.0))])
         woperf_vertical = np.mean(np.sort(worst_ds_vertical)[::-1][0:np.int(len(groundtruths) * perc / float(100.0))])
 
-        # plt.figure()
-        # plt.hist(worst_ds)
-        # plt.show()
-        #
-        # plt.figure()
-        # plt.scatter(p2_x, p2_y)
-        # plt.scatter(p3_x, p3_y)
-        # plt.scatter(groundtruths, predictions)
-        # plt.show()
-
-        result = {'score': woperf_vertical}
+        result = {'score': woperf_vertical, 'slope_transform': slope_transform, 'intercept_transform': intercept_transform,
+                  'ys_label_after_sigmoid_adjust': groundtruths, 'ys_label_pred_after_sigmoid_adjust': predictions}
         return result
