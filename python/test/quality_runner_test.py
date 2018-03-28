@@ -32,7 +32,7 @@ class QualityRunnerTest(unittest.TestCase):
         runner = VmafLegacyQualityRunner([asset], None)
         self.assertEquals(runner.executor_id, 'VMAF_legacy_VF0.2.4b-1.1')
 
-    def test_run_vamf_legacy_runner(self):
+    def test_run_vmaf_legacy_runner(self):
         print 'test on running VMAF (legacy) runner...'
         ref_path = VmafConfig.test_resource_path("yuv", "src01_hrc00_576x324.yuv")
         dis_path = VmafConfig.test_resource_path("yuv", "src01_hrc01_576x324.yuv")
@@ -71,7 +71,7 @@ class QualityRunnerTest(unittest.TestCase):
         self.assertAlmostEqual(results[0]['VMAF_legacy_score'], 65.393758021816708, places=4)
         self.assertAlmostEqual(results[1]['VMAF_legacy_score'], 96.444658329804156, places=4)
 
-    def test_run_vamf_legacy_runner_10le(self):
+    def test_run_vmaf_legacy_runner_10le(self):
         print 'test on running VMAF (legacy) runner on 10 bit le...'
         ref_path = VmafConfig.test_resource_path("yuv", "src01_hrc00_576x324.yuv422p10le.yuv")
         dis_path = VmafConfig.test_resource_path("yuv", "src01_hrc01_576x324.yuv422p10le.yuv")
@@ -112,7 +112,7 @@ class QualityRunnerTest(unittest.TestCase):
         self.assertAlmostEqual(results[0]['VMAF_legacy_score'], 65.393758021816708, places=4)
         self.assertAlmostEqual(results[1]['VMAF_legacy_score'], 96.444658329804156, places=4)
 
-    def test_run_vamf_legacy_runner_with_result_store(self):
+    def test_run_vmaf_legacy_runner_with_result_store(self):
         print 'test on running VMAF (legacy) runner with result store...'
         ref_path = VmafConfig.test_resource_path("yuv", "src01_hrc00_576x324.yuv")
         dis_path = VmafConfig.test_resource_path("yuv", "src01_hrc01_576x324.yuv")

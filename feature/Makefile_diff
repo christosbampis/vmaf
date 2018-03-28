@@ -1,0 +1,49 @@
+TOP = $(shell pwd)
+
+SRCDIR  = $(TOP)/src_diff
+OBJDIR  = $(TOP)/obj_diff
+
+OBJS_VMAF_DIFF = \
+	$(OBJDIR)/common_diff/alloc.o \
+	$(OBJDIR)/common_diff/file_io.o \
+	$(OBJDIR)/common_diff/convolution.o \
+	$(OBJDIR)/common_diff/convolution_avx.o \
+	$(OBJDIR)/adm.o \
+	$(OBJDIR)/adm_tools.o \
+	$(OBJDIR)/ansnr.o \
+	$(OBJDIR)/ansnr_tools.o \
+	$(OBJDIR)/vif.o \
+	$(OBJDIR)/vif_tools.o \
+	$(OBJDIR)/motion.o \
+	$(OBJDIR)/all_ondiff.o \
+	$(OBJDIR)/vmaf_main.o \
+	$(OBJDIR)/common_diff/cpu.o \
+
+AVX_OBJS := \
+	$(OBJDIR)/common_diff/convolution_avx.o \
+
+all: vmaf_diff
+
+CFLAGS_COMMON = -g -O3 -fPIC -w -Wextra -pedantic
+# CFLAGS_COMMON = -g -O0 -fPIC -Wall -Wextra -pedantic -D BUILD_O0
+
+CFLAGS   := -std=c99 $(CFLAGS_COMMON) $(CFLAGS)
+CXXFLAGS := -std=c++11 $(CFLAGS_COMMON) $(CXXFLAGS)
+CPPFLAGS := $(CPPFLAGS)
+LIBS     := $(LIBS) -lm
+LDFLAGS  := $(LDFLAGS)
+
+$(AVX_OBJS): EXTRA_CFLAGS := -mavx
+
+$(OBJDIR)/%.o: $(SRCDIR)/%.c
+	$(CC) $(EXTRA_CFLAGS) -c -o $@ $(CFLAGS) $(CPPFLAGS) $<
+
+vmaf_diff: $(OBJS_VMAF_DIFF)
+	$(CC) -o $@ $(LDFLAGS) $^ $(LIBS)
+
+clean:
+	rm -f $(OBJDIR)/*.o
+	rm -f $(OBJDIR)/common/*.o
+	rm -f vmaf_on_diffs
+
+.PHONY: all clean

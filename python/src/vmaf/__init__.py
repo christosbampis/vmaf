@@ -28,6 +28,7 @@ class ExternalProgram(object):
     ms_ssim = project_path("feature/ms_ssim")
     vmaf = project_path("feature/vmaf")
     vmafossexec = project_path("wrapper/vmafossexec")
+    vmaf_diff = project_path("feature/vmaf_diff")
 
 class ExternalProgramCaller(object):
     """
@@ -109,6 +110,28 @@ class ExternalProgramCaller(object):
         if logger:
             logger.info(vmaf_feature_cmd)
         run_process(vmaf_feature_cmd, shell=True)
+
+    @staticmethod
+    def call_vmaf_diff_feature(yuv_type, ref_path, dis_path, w, h, overlap, is_it_diff, log_file_path, logger=None):
+
+        # APPEND (>>) result (since _prepare_generate_log_file method has already created the file
+        # and written something in advance).
+        vmaf_diff_feature_cmd = "{vmaf_diff} all {yuv_type} {ref_path} {dis_path} {w} {h} 0 0 {h} " \
+                                "{w} -1 -1 {overlap} {is_it_diff} >> {log_file_path}" \
+            .format(
+            vmaf_diff=required(ExternalProgram.vmaf_diff),
+            yuv_type=yuv_type,
+            ref_path=ref_path,
+            dis_path=dis_path,
+            w=w,
+            h=h,
+            log_file_path=log_file_path,
+            overlap=overlap,
+            is_it_diff=is_it_diff,
+        )
+        if logger:
+            logger.info(vmaf_diff_feature_cmd)
+        run_process(vmaf_diff_feature_cmd, shell=True)
 
     @staticmethod
     def call_vmafossexec(fmt, w, h, ref_path, dis_path, model, log_file_path, disable_clip_score,

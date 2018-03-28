@@ -104,13 +104,13 @@ python -c 'import sys; print(sys.path)'
 
 ## Installation
 
-First, pull submodule `sureal` by running:
+First, clone the VMAF repository and `cd` to the repo directory. Then, pull submodule `sureal` by running:
 
 ```
 git submodule update --init --recursive
 ```
 
-After cloning VMAF repository, `cd` to the repo directory and run:
+After pulling the sureal submodule, run:
 
 ```
 make

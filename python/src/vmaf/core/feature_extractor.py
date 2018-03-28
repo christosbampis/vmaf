@@ -574,3 +574,292 @@ class StrredFeatureExtractor(MatlabFeatureExtractor):
             assert cls.get_scores_key(feature) in result.result_dict
 
         return result
+
+
+class SpEEDMatlabFeatureExtractor(MatlabFeatureExtractor):
+    TYPE = 'SpEED_Matlab_feature'
+
+    VERSION = '0.1'
+
+    scale_list = [2, 3, 4]
+    ATOM_FEATURES = []
+    DERIVED_ATOM_FEATURES = []
+
+    for scale_now in scale_list:
+        ATOM_FEATURES.append('sspeed_' + str(scale_now))
+        ATOM_FEATURES.append('tspeed_' + str(scale_now))
+
+        DERIVED_ATOM_FEATURES.append('speed_' + str(scale_now))
+
+    MATLAB_WORKSPACE = VmafConfig.root_path('matlab', 'strred')
+
+    def _generate_result(self, asset):
+        # routine to call the command-line executable and generate quality
+        # scores in the log file.
+
+        ref_workfile_path = asset.ref_workfile_path
+        dis_workfile_path = asset.dis_workfile_path
+        log_file_path = self._get_log_file_path(asset)
+
+        current_dir = os.getcwd() + '/'
+
+        ref_workfile_path = make_absolute_path(ref_workfile_path, current_dir)
+        dis_workfile_path = make_absolute_path(dis_workfile_path, current_dir)
+        log_file_path = make_absolute_path(log_file_path, current_dir)
+
+        quality_width, quality_height = asset.quality_width_height
+
+        speed_cmd = '''{matlab} -nodisplay -nosplash -nodesktop -r "run_speed('{ref}', '{dis}', {w}, {h}, {bands}, '{yuv_type}'); exit;" >> {log_file_path}'''.format(
+            matlab=VmafExternalConfig.get_and_assert_matlab(),
+            ref=ref_workfile_path,
+            dis=dis_workfile_path,
+            w=quality_width,
+            h=quality_height,
+            bands=self.scale_list,
+            yuv_type=self._get_workfile_yuv_type(asset),
+            log_file_path=log_file_path,
+        )
+
+        if self.logger:
+            self.logger.info(speed_cmd)
+
+        os.chdir(self.MATLAB_WORKSPACE)
+        run_process(speed_cmd, shell=True)
+        os.chdir(current_dir)
+
+    @classmethod
+    def _post_process_result(cls, result):
+        # override Executor._post_process_result
+
+        def _speed(sspeed_tspeed):
+            sspeed, tspeed = sspeed_tspeed
+            if sspeed is not None and tspeed is not None:
+                return sspeed * tspeed
+            elif sspeed is None:
+                return tspeed
+            elif tspeed is None:
+                return sspeed
+            else:
+                return None
+
+        result = super(SpEEDMatlabFeatureExtractor, cls)._post_process_result(result)
+
+        for scale_now in cls.scale_list:
+            sspeed_scale_now_scores_key = cls.get_scores_key('sspeed_' + str(scale_now))
+            tspeed_scale_now_scores_key = cls.get_scores_key('tspeed_' + str(scale_now))
+            speed_scale_now_scores_key = cls.get_scores_key('speed_' + str(scale_now))
+
+            sspeed_scale_now_scores = result.result_dict[sspeed_scale_now_scores_key]
+            tspeed_scale_now_scores = result.result_dict[tspeed_scale_now_scores_key]
+
+            assert len(sspeed_scale_now_scores) == len(tspeed_scale_now_scores)
+
+            # consistent with VMAF framework, which is to multiply S and T scores per frame, then average
+            speed_scale_now_scores = map(_speed, zip(sspeed_scale_now_scores, tspeed_scale_now_scores))
+
+            result.result_dict[speed_scale_now_scores_key] = speed_scale_now_scores
+
+        # validate
+        for feature in cls.DERIVED_ATOM_FEATURES:
+            assert cls.get_scores_key(feature) in result.result_dict
+
+        return result
+
+
+class VmafDiffFeatureExtractor(FeatureExtractor):
+
+    TYPE = "VMAFDiff_feature"
+
+    VERSION = '0.1'
+
+    ATOM_FEATURES = ['vif_diff', 'adm_diff', 'motion',
+                     'vif_num_diff', 'vif_den_diff', 'adm_num_diff', 'adm_den_diff',
+                     'vif_num_scale0_diff', 'vif_den_scale0_diff',
+                     'vif_num_scale1_diff', 'vif_den_scale1_diff',
+                     'vif_num_scale2_diff', 'vif_den_scale2_diff',
+                     'vif_num_scale3_diff', 'vif_den_scale3_diff',
+                     'adm_num_scale0_diff', 'adm_den_scale0_diff',
+                     'adm_num_scale1_diff', 'adm_den_scale1_diff',
+                     'adm_num_scale2_diff', 'adm_den_scale2_diff',
+                     'adm_num_scale3_diff', 'adm_den_scale3_diff',
+                     ]
+
+    DERIVED_ATOM_FEATURES = ['vif_scale0_diff', 'vif_scale1_diff', 'vif_scale2_diff', 'vif_scale3_diff',
+                             'vif2_diff', 'adm2_diff', 'adm3_diff',
+                             'adm_scale0_diff', 'adm_scale1_diff', 'adm_scale2_diff', 'adm_scale3_diff',
+                             'motion2',
+                             ]
+
+    ADM2_CONSTANT = 0.1
+    VIF_CONSTANT = 0.1
+    ADM_SCALE_CONSTANT = 0.1
+
+    def _generate_result(self, asset):
+        # routine to call the command-line executable and generate feature
+        # scores in the log file.
+
+        quality_width, quality_height = asset.quality_width_height
+        log_file_path = self._get_log_file_path(asset)
+
+        yuv_type=self._get_workfile_yuv_type(asset)
+        ref_path=asset.ref_workfile_path
+        dis_path=asset.dis_workfile_path
+        w=quality_width
+        h=quality_height
+        logger = self.logger
+
+        overlap = 1
+        is_it_diff = 1
+
+        ExternalProgramCaller.call_vmaf_diff_feature(yuv_type, ref_path, dis_path, w, h, overlap,
+                                                     is_it_diff, log_file_path, logger)
+
+    @classmethod
+    def _post_process_result(cls, result):
+        # override Executor._post_process_result
+
+        result = super(VmafDiffFeatureExtractor, cls)._post_process_result(result)
+
+        # adm2 =
+        # (adm_num + ADM2_CONSTANT) / (adm_den + ADM2_CONSTANT)
+        adm2_scores_key = cls.get_scores_key('adm2_diff')
+        adm_num_scores_key = cls.get_scores_key('adm_num_diff')
+        adm_den_scores_key = cls.get_scores_key('adm_den_diff')
+        result.result_dict[adm2_scores_key] = list(
+            (np.array(result.result_dict[adm_num_scores_key]) + cls.ADM2_CONSTANT) /
+            (np.array(result.result_dict[adm_den_scores_key]) + cls.ADM2_CONSTANT)
+        )
+
+        # vif_scalei = vif_num_scalei / vif_den_scalei, i = 0, 1, 2, 3
+        vif_num_scale0_scores_key = cls.get_scores_key('vif_num_scale0_diff')
+        vif_den_scale0_scores_key = cls.get_scores_key('vif_den_scale0_diff')
+        vif_num_scale1_scores_key = cls.get_scores_key('vif_num_scale1_diff')
+        vif_den_scale1_scores_key = cls.get_scores_key('vif_den_scale1_diff')
+        vif_num_scale2_scores_key = cls.get_scores_key('vif_num_scale2_diff')
+        vif_den_scale2_scores_key = cls.get_scores_key('vif_den_scale2_diff')
+        vif_num_scale3_scores_key = cls.get_scores_key('vif_num_scale3_diff')
+        vif_den_scale3_scores_key = cls.get_scores_key('vif_den_scale3_diff')
+        vif_scale0_scores_key = cls.get_scores_key('vif_scale0_diff')
+        vif_scale1_scores_key = cls.get_scores_key('vif_scale1_diff')
+        vif_scale2_scores_key = cls.get_scores_key('vif_scale2_diff')
+        vif_scale3_scores_key = cls.get_scores_key('vif_scale3_diff')
+
+        result.result_dict[vif_scale0_scores_key] = list(
+            (np.array(result.result_dict[vif_num_scale0_scores_key]) + cls.VIF_CONSTANT)
+             / (np.array(result.result_dict[vif_den_scale0_scores_key]) + cls.VIF_CONSTANT)
+        )
+
+        result.result_dict[vif_scale1_scores_key] = list(
+            (np.array(result.result_dict[vif_num_scale1_scores_key]) + cls.VIF_CONSTANT)
+             / (np.array(result.result_dict[vif_den_scale1_scores_key]) + cls.VIF_CONSTANT)
+        )
+
+        result.result_dict[vif_scale2_scores_key] = list(
+            (np.array(result.result_dict[vif_num_scale2_scores_key]) + cls.VIF_CONSTANT)
+             / (np.array(result.result_dict[vif_den_scale2_scores_key]) + cls.VIF_CONSTANT)
+        )
+
+        result.result_dict[vif_scale3_scores_key] = list(
+            (np.array(result.result_dict[vif_num_scale3_scores_key]) + cls.VIF_CONSTANT)
+             / (np.array(result.result_dict[vif_den_scale3_scores_key]) + cls.VIF_CONSTANT)
+        )
+
+        # vif2 =
+        # ((vif_num_scale0 / vif_den_scale0) + (vif_num_scale1 / vif_den_scale1) +
+        # (vif_num_scale2 / vif_den_scale2) + (vif_num_scale3 / vif_den_scale3)) / 4.0
+        vif_scores_key = cls.get_scores_key('vif2_diff')
+        result.result_dict[vif_scores_key] = list(
+            (
+                ((np.array(result.result_dict[vif_num_scale0_scores_key]) + cls.VIF_CONSTANT)
+                 / (np.array(result.result_dict[vif_den_scale0_scores_key]) + cls.VIF_CONSTANT)) +
+
+                ((np.array(result.result_dict[vif_num_scale1_scores_key]) + cls.VIF_CONSTANT)
+                 / (np.array(result.result_dict[vif_den_scale1_scores_key]) + cls.VIF_CONSTANT)) +
+
+                ((np.array(result.result_dict[vif_num_scale2_scores_key]) + cls.VIF_CONSTANT)
+                 / (np.array(result.result_dict[vif_den_scale2_scores_key]) + cls.VIF_CONSTANT)) +
+
+                ((np.array(result.result_dict[vif_num_scale3_scores_key]) + cls.VIF_CONSTANT)
+                 / (np.array(result.result_dict[vif_den_scale3_scores_key]) + cls.VIF_CONSTANT))
+
+            ) / 4.0
+        )
+
+        # vif_weighted_sum_scores_key = cls.get_scores_key('vif_weighted_sum')
+        # result.result_dict[vif_weighted_sum_scores_key] = list(
+        #     (
+        #         1.0/64*(np.array(result.result_dict[vif_num_scale0_scores_key])
+        #          / np.array(result.result_dict[vif_den_scale0_scores_key])) +
+        #         1.0/16*(np.array(result.result_dict[vif_num_scale1_scores_key])
+        #          / np.array(result.result_dict[vif_den_scale1_scores_key])) +
+        #         1.0/4*(np.array(result.result_dict[vif_num_scale2_scores_key])
+        #          / np.array(result.result_dict[vif_den_scale2_scores_key])) +
+        #         1.0/1*(np.array(result.result_dict[vif_num_scale3_scores_key])
+        #          / np.array(result.result_dict[vif_den_scale3_scores_key]))
+        #     )
+        # )
+
+        # adm_scalei = adm_num_scalei / adm_den_scalei, i = 0, 1, 2, 3
+        adm_num_scale0_scores_key = cls.get_scores_key('adm_num_scale0_diff')
+        adm_den_scale0_scores_key = cls.get_scores_key('adm_den_scale0_diff')
+        adm_num_scale1_scores_key = cls.get_scores_key('adm_num_scale1_diff')
+        adm_den_scale1_scores_key = cls.get_scores_key('adm_den_scale1_diff')
+        adm_num_scale2_scores_key = cls.get_scores_key('adm_num_scale2_diff')
+        adm_den_scale2_scores_key = cls.get_scores_key('adm_den_scale2_diff')
+        adm_num_scale3_scores_key = cls.get_scores_key('adm_num_scale3_diff')
+        adm_den_scale3_scores_key = cls.get_scores_key('adm_den_scale3_diff')
+        adm_scale0_scores_key = cls.get_scores_key('adm_scale0_diff')
+        adm_scale1_scores_key = cls.get_scores_key('adm_scale1_diff')
+        adm_scale2_scores_key = cls.get_scores_key('adm_scale2_diff')
+        adm_scale3_scores_key = cls.get_scores_key('adm_scale3_diff')
+        result.result_dict[adm_scale0_scores_key] = list(
+            (np.array(result.result_dict[adm_num_scale0_scores_key]) + cls.ADM_SCALE_CONSTANT)
+            / (np.array(result.result_dict[adm_den_scale0_scores_key]) + cls.ADM_SCALE_CONSTANT)
+        )
+        result.result_dict[adm_scale1_scores_key] = list(
+            (np.array(result.result_dict[adm_num_scale1_scores_key]) + cls.ADM_SCALE_CONSTANT)
+            / (np.array(result.result_dict[adm_den_scale1_scores_key]) + cls.ADM_SCALE_CONSTANT)
+        )
+        result.result_dict[adm_scale2_scores_key] = list(
+            (np.array(result.result_dict[adm_num_scale2_scores_key]) + cls.ADM_SCALE_CONSTANT)
+            / (np.array(result.result_dict[adm_den_scale2_scores_key]) + cls.ADM_SCALE_CONSTANT)
+        )
+        result.result_dict[adm_scale3_scores_key] = list(
+            (np.array(result.result_dict[adm_num_scale3_scores_key]) + cls.ADM_SCALE_CONSTANT)
+            / (np.array(result.result_dict[adm_den_scale3_scores_key]) + cls.ADM_SCALE_CONSTANT)
+        )
+
+        # adm3 = \
+        # (((adm_num_scale0 + ADM_SCALE_CONSTANT) / (adm_den_scale0 + ADM_SCALE_CONSTANT))
+        #  + ((adm_num_scale1 + ADM_SCALE_CONSTANT) / (adm_den_scale1 + ADM_SCALE_CONSTANT))
+        #  + ((adm_num_scale2 + ADM_SCALE_CONSTANT) / (adm_den_scale2 + ADM_SCALE_CONSTANT))
+        #  + ((adm_num_scale3 + ADM_SCALE_CONSTANT) / (adm_den_scale3 + ADM_SCALE_CONSTANT))) / 4.0
+        adm3_scores_key = cls.get_scores_key('adm3_diff')
+        result.result_dict[adm3_scores_key] = list(
+            (
+                ((np.array(result.result_dict[adm_num_scale0_scores_key]) + cls.ADM_SCALE_CONSTANT)
+                 / (np.array(result.result_dict[adm_den_scale0_scores_key]) + cls.ADM_SCALE_CONSTANT)) +
+                ((np.array(result.result_dict[adm_num_scale1_scores_key]) + cls.ADM_SCALE_CONSTANT)
+                 / (np.array(result.result_dict[adm_den_scale1_scores_key]) + cls.ADM_SCALE_CONSTANT)) +
+                ((np.array(result.result_dict[adm_num_scale2_scores_key]) + cls.ADM_SCALE_CONSTANT)
+                 / (np.array(result.result_dict[adm_den_scale2_scores_key]) + cls.ADM_SCALE_CONSTANT)) +
+                ((np.array(result.result_dict[adm_num_scale3_scores_key]) + cls.ADM_SCALE_CONSTANT)
+                 / (np.array(result.result_dict[adm_den_scale3_scores_key]) + cls.ADM_SCALE_CONSTANT))
+            ) / 4.0
+        )
+
+        # motion2: motion2[i] = min(motion[i], motion[i+1])
+        motion2_scores_key = cls.get_scores_key('motion2')
+        motion_scores_key = cls.get_scores_key('motion')
+        motion_scores = result.result_dict[motion_scores_key]
+        motion_scores_2 = motion_scores[1:] + [motion_scores[-1]]
+        motion2_scores = np.minimum(motion_scores, motion_scores_2)
+        result.result_dict[motion2_scores_key] = list( # !! list(.) so that ast.literal_eval could handle in FileSystemResultStore
+            motion2_scores
+        )
+
+        # validate
+        for feature in cls.DERIVED_ATOM_FEATURES:
+            assert cls.get_scores_key(feature) in result.result_dict
+
+        return result
