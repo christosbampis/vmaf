@@ -1,5 +1,6 @@
 # Change Log
 
+## (9/04/2018) Li-Heng modified this file. 
 ## (8/12/2017) [1.3.1]
 
 **Refactoring:**
