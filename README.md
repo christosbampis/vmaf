@@ -1,4 +1,4 @@
-VMAF - Video Multi-Method Assessment Fusion
+MAF - Video Multi-Method Assessment Fusion
 ===================
 [![Build Status](https://travis-ci.org/Netflix/vmaf.svg?branch=master)](https://travis-ci.org/Netflix/vmaf)
 
