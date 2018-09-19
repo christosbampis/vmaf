@@ -431,6 +431,15 @@ class VmafPhoneQualityRunner(VmafQualityRunner):
     def _do_transform_score(kwargs):
         return True
 
+class VmafLHCQualityRunner(VmafQualityRunner):
+
+    TYPE = 'VMAF'
+
+    VERSION = '{}-LHC'.format(VmafQualityRunner.VERSION)
+
+    def lhc_print(self):
+        print('\n\n\nLHCs test on class inheritance\n\n\n')
+
 class VmafossExecQualityRunner(QualityRunner):
 
     TYPE = 'VMAFOSSEXEC'

@@ -10,7 +10,8 @@ from vmaf.config import VmafConfig
 from vmaf.core.asset import Asset
 from vmaf.core.quality_runner import VmafLegacyQualityRunner, VmafQualityRunner, \
     PsnrQualityRunner, VmafossExecQualityRunner, MsSsimQualityRunner, \
-    SsimQualityRunner, Adm2QualityRunner, VmafPhoneQualityRunner
+    SsimQualityRunner, Adm2QualityRunner, VmafPhoneQualityRunner, \
+    VmafLHCQualityRunner
 from vmaf.core.result_store import FileSystemResultStore
 
 
@@ -288,6 +289,78 @@ class QualityRunnerTest(unittest.TestCase):
 
         self.assertAlmostEqual(results[0]['VMAF_score'], 92.542390144364546, places=4)
         self.assertAlmostEqual(results[1]['VMAF_score'], 100.0, places=4)
+
+    def test_run_vmaf_LH_runner(self):
+        print 'test on running VMAF LH runner...'
+        ref_path = VmafConfig.test_resource_path("yuv", "src01_hrc00_576x324.yuv")
+        dis_path = VmafConfig.test_resource_path("yuv", "src01_hrc01_576x324.yuv")
+        asset = Asset(dataset="test", content_id=0, asset_id=0,
+                      workdir_root=VmafConfig.workdir_path(),
+                      ref_path=ref_path,
+                      dis_path=dis_path,
+                      asset_dict={'width':576, 'height':324})
+
+        asset_original = Asset(dataset="test", content_id=0, asset_id=1,
+                      workdir_root=VmafConfig.workdir_path(),
+                      ref_path=ref_path,
+                      dis_path=ref_path,
+                      asset_dict={'width':576, 'height':324})
+
+        # Instance a golden runner (VmafQualityRunner)
+        self.runner_golden = VmafQualityRunner(
+            [asset, asset_original],
+            None, fifo_mode=True,
+            delete_workdir=True,
+            result_store=None,
+        )
+        self.runner_golden.run()
+        results_golden = self.runner_golden.results
+
+        self.runner = VmafLHCQualityRunner(
+            [asset, asset_original],
+            None, fifo_mode=True,
+            delete_workdir=True,
+            result_store=None,
+        )
+        self.runner.run()
+
+        results = self.runner.results
+
+        # Function test
+        self.runner.lhc_print()
+        # Assertions for eusnring that the results of VmafQualityRunner and VmafLHCQualityRunner are identical
+        result_idx2 = ['VMAF_feature_vif_scale0_score', 'VMAF_feature_vif_scale1_score', 'VMAF_feature_vif_scale2_score',\
+                       'VMAF_feature_vif_scale3_score', 'VMAF_feature_motion2_score'   , 'VMAF_feature_adm2_score', \
+                       'VMAF_score']
+        for idx1 in [0, 1]:
+            for idx2 in result_idx2:
+                assert(results[idx1][idx2]==results_golden[idx1][idx2])
+
+        self.assertAlmostEqual(results[0]['VMAF_feature_vif_scale0_score'], 0.363420489439, places=4)
+        self.assertAlmostEqual(results[0]['VMAF_feature_vif_scale1_score'], 0.766647542135, places=4)
+        self.assertAlmostEqual(results[0]['VMAF_feature_vif_scale2_score'], 0.862854666902, places=4)
+        self.assertAlmostEqual(results[0]['VMAF_feature_vif_scale3_score'], 0.915971778036, places=4)
+        self.assertAlmostEqual(results[0]['VMAF_feature_motion2_score'], 3.8953518541666665, places=4)
+        self.assertAlmostEqual(results[0]['VMAF_feature_adm2_score'], 0.93458780728708746, places=4)
+
+        self.assertAlmostEqual(results[1]['VMAF_feature_vif_scale0_score'], 1.00000001415, places=4)
+        self.assertAlmostEqual(results[1]['VMAF_feature_vif_scale1_score'],0.99999972612, places=4)
+        self.assertAlmostEqual(results[1]['VMAF_feature_vif_scale2_score'], 0.999999465724, places=4)
+        self.assertAlmostEqual(results[1]['VMAF_feature_vif_scale3_score'], 0.999999399683, places=4)
+        self.assertAlmostEqual(results[1]['VMAF_feature_motion2_score'], 3.8953518541666665, places=4)
+        self.assertAlmostEqual(results[1]['VMAF_feature_adm2_score'], 1.0, places=4)
+
+        with self.assertRaises(KeyError):
+            self.assertAlmostEqual(results[1]['VMAF_feature_vif_score'], 1.0, places=4)
+
+        with self.assertRaises(KeyError):
+            self.assertAlmostEqual(results[1]['VMAF_feature_ansnr_score'], 1.0, places=4)
+
+        with self.assertRaises(KeyError):
+            self.assertAlmostEqual(results[1]['VMAF_feature_motion_score'], 1.0, places=4)
+
+        self.assertAlmostEqual(results[0]['VMAF_score'], 76.699271272486044, places=4)
+        self.assertAlmostEqual(results[1]['VMAF_score'], 99.946416604585025, places=4)
 
     def test_run_vmaf_phone_runner(self):
         print 'test on running VMAF phone runner...'
