@@ -542,12 +542,12 @@ std::unique_ptr<LibsvmNusvrTrainTestModel> VmafQualityRunner::_load_model(const 
 
 void VmafQualityRunner::_set_prediction_result(
         std::vector<VmafPredictionStruct> predictionStructs,
-        Result& result) {
+        Result& result, std::string model_name) {
     StatVector score;
     for (size_t i = 0; i < predictionStructs.size(); i++) {
         score.append(predictionStructs.at(i).vmafPrediction[VmafPredictionReturnType::SCORE]);
     }
-    result.set_scores("vmaf", score);
+    result.set_scores(model_name, score);
 }
 
 AdditionalModelStruct _get_additional_model_struct(char *model_paths)
@@ -814,9 +814,9 @@ Result VmafQualityRunner::run(Asset asset, int (*read_frame)(float *ref_data, fl
         result.set_scores("ms_ssim", ms_ssim);
     }
 
-    _set_prediction_result(predictionStructs, result);
+    _set_prediction_result(predictionStructs, result, "vmaf");
 
-        // read additional models, if any
+    // read additional models, if any
     if (vmafContext->additional_model_paths != NULL) {
 
         AdditionalModelStruct additional_model_struct = _get_additional_model_struct(vmafContext->additional_model_paths);
@@ -828,7 +828,7 @@ Result VmafQualityRunner::run(Asset asset, int (*read_frame)(float *ref_data, fl
         StatVector additional_score, additional_score_et;
         std::string additional_model_struct_et_model_name;
 
-        // predict VMAF using additional models (calculate with and without enable_transform)
+        // predict using additional models, if any (calculate with and without enable_transform)
         for (int additional_model_ind = 0; additional_model_ind < num_additional_models; additional_model_ind++) {
 
             additional_model_ptr = _load_model(additional_model_struct.model_paths.at(additional_model_ind).c_str());
@@ -844,18 +844,9 @@ Result VmafQualityRunner::run(Asset asset, int (*read_frame)(float *ref_data, fl
                 vif_scale0, vif_scale1, vif_scale2, vif_scale3, vif, motion2,
                 true, vmafContext->disable_clip, additional_prediction_struct_et);
 
-            for (size_t frm_ind = 0; frm_ind < predictionStructs.size(); frm_ind++) {
-                additional_score.append(additional_prediction_struct.at(frm_ind).vmafPrediction[VmafPredictionReturnType::SCORE]);
-                additional_score_et.append(additional_prediction_struct_et.at(frm_ind).vmafPrediction[VmafPredictionReturnType::SCORE]);
-            }
+            _set_prediction_result(additional_prediction_struct, result, additional_model_struct.model_names.at(additional_model_ind));
+            _set_prediction_result(additional_prediction_struct_et, result, additional_model_struct.model_names.at(additional_model_ind) + "_transformed");
 
-            result.set_scores(additional_model_struct.model_names.at(additional_model_ind).c_str(), additional_score);
-            additional_model_struct_et_model_name = additional_model_struct.model_names.at(additional_model_ind) + "_transformed";
-            result.set_scores(additional_model_struct_et_model_name.c_str(), additional_score_et);
-
-            // clean up vectors
-            additional_score = {};
-            additional_score_et = {};
             additional_prediction_struct.clear();
             additional_prediction_struct_et.clear();
 
@@ -983,9 +974,9 @@ std::string to_zero_lead(const int value, const unsigned precision)
 
 void BootstrapVmafQualityRunner::_set_prediction_result(
         std::vector<VmafPredictionStruct> predictionStructs,
-        Result& result) {
+        Result& result, std::string model_name) {
 
-    VmafQualityRunner::_set_prediction_result(predictionStructs, result);
+    VmafQualityRunner::_set_prediction_result(predictionStructs, result, model_name);
 
     StatVector baggingScore, stdDev, ci95LowScore, ci95HighScore;
     for (size_t i = 0; i < predictionStructs.size(); i++) {
@@ -994,30 +985,31 @@ void BootstrapVmafQualityRunner::_set_prediction_result(
         ci95LowScore.append(predictionStructs.at(i).vmafPrediction[VmafPredictionReturnType::CI95_LOW]);
         ci95HighScore.append(predictionStructs.at(i).vmafPrediction[VmafPredictionReturnType::CI95_HIGH]);
     }
-    result.set_scores("bagging", baggingScore);
-    result.set_scores("stddev", stdDev);
-    result.set_scores("ci95_low", ci95LowScore);
-    result.set_scores("ci95_high", ci95HighScore);
+    result.set_scores(model_name + "_bagging", baggingScore);
+    result.set_scores(model_name + "_stddev", stdDev);
+    result.set_scores(model_name + "_ci95_low", ci95LowScore);
+    result.set_scores(model_name + "_ci95_high", ci95HighScore);
 
     // num_models is same across frames, so just use first frame length
     size_t num_models = 0; 
     if (predictionStructs.size() > 0) {
         num_models = predictionStructs.at(0).vmafMultiModelPrediction.size();
     }
-    std::vector<double> perModelScore;
-    // name of the vmaf bootstrap model, e.g. vmaf_0001 is the first one
 
+    std::vector<double> perModelScore;
+
+    // bootstrap model result key example: vmaf_bootstrap_0001 is the first bootstrapped model for vmaf
     for (size_t j = 0; j < num_models; j++) {
         for (size_t i = 0; i < predictionStructs.size(); i++) {
             perModelScore.push_back(predictionStructs.at(i).vmafMultiModelPrediction.at(j));
         }
-        result.set_scores(BOOSTRAP_VMAF_MODEL_PREFIX + to_zero_lead(j + 1, BOOTSTRAP_MODEL_NAME_PRECISION), perModelScore);
+        result.set_scores(model_name + BOOSTRAP_VMAF_MODEL_KEY + to_zero_lead(j + 1, BOOTSTRAP_MODEL_NAME_PRECISION), perModelScore);
         perModelScore.clear();
     }
 
 }
 
-static const char VMAFOSS_DOC_VERSION[] = "1.3.14";
+static const char VMAFOSS_DOC_VERSION[] = "1.3.15";
 
 double RunVmaf(int (*read_frame)(float *ref_data, float *main_data, float *temp_data, int stride, void *user_data),
                void *user_data, VmafContext *vmafContext)
@@ -1074,14 +1066,14 @@ double RunVmaf(int (*read_frame)(float *ref_data, float *main_data, float *temp_
     std::vector<std::string> result_keys = result.get_keys();
 
     double aggregate_bagging = 0.0, aggregate_stddev = 0.0, aggregate_ci95_low = 0.0, aggregate_ci95_high = 0.0;
-    if (result.has_scores("bagging"))
-        aggregate_bagging = result.get_score("bagging");
-    if (result.has_scores("stddev"))
-        aggregate_stddev = result.get_score("stddev");
-    if (result.has_scores("ci95_low"))
-        aggregate_ci95_low = result.get_score("ci95_low");
-    if (result.has_scores("ci95_high"))
-        aggregate_ci95_high = result.get_score("ci95_high");
+    if (result.has_scores("vmaf_bagging"))
+        aggregate_bagging = result.get_score("vmaf_bagging");
+    if (result.has_scores("vmaf_stddev"))
+        aggregate_stddev = result.get_score("vmaf_stddev");
+    if (result.has_scores("vmaf_ci95_low"))
+        aggregate_ci95_low = result.get_score("vmaf_ci95_low");
+    if (result.has_scores("vmaf_ci95_high"))
+        aggregate_ci95_high = result.get_score("vmaf_ci95_high");
 
     double aggregate_psnr = 0.0, aggregate_ssim = 0.0, aggregate_ms_ssim = 0.0;
     if (result.has_scores("psnr"))
@@ -1095,13 +1087,13 @@ double RunVmaf(int (*read_frame)(float *ref_data, float *main_data, float *temp_
     {
         printf("VMAF score (%s) = %f\n", vmafContext->pool_method, aggregate_vmaf);
         if (aggregate_bagging)
-            printf("Bagging score (%s) = %f\n", vmafContext->pool_method, aggregate_bagging);
+            printf("VMAF Bagging score (%s) = %f\n", vmafContext->pool_method, aggregate_bagging);
         if (aggregate_stddev)
-            printf("StdDev score (%s) = %f\n", vmafContext->pool_method, aggregate_stddev);
+            printf("VMAF StdDev score (%s) = %f\n", vmafContext->pool_method, aggregate_stddev);
         if (aggregate_ci95_low)
-            printf("CI95_low score (%s) = %f\n", vmafContext->pool_method, aggregate_ci95_low);
+            printf("VMAF CI95_low score (%s) = %f\n", vmafContext->pool_method, aggregate_ci95_low);
         if (aggregate_ci95_high)
-            printf("CI95_high score (%s) = %f\n", vmafContext->pool_method, aggregate_ci95_high);
+            printf("VMAF CI95_high score (%s) = %f\n", vmafContext->pool_method, aggregate_ci95_high);
         if (aggregate_psnr)
             printf("PSNR score (%s) = %f\n", vmafContext->pool_method, aggregate_psnr);
         if (aggregate_ssim)
@@ -1113,13 +1105,13 @@ double RunVmaf(int (*read_frame)(float *ref_data, float *main_data, float *temp_
     {
         printf("VMAF score = %f\n", aggregate_vmaf);
         if (aggregate_bagging)
-            printf("Bagging score = %f\n", aggregate_bagging);
+            printf("VMAF Bagging score = %f\n", aggregate_bagging);
         if (aggregate_stddev)
-            printf("StdDev score = %f\n", aggregate_stddev);
+            printf("VMAF StdDev score = %f\n", aggregate_stddev);
         if (aggregate_ci95_low)
-            printf("CI95_low score = %f\n", aggregate_ci95_low);
+            printf("VMAF CI95_low score = %f\n", aggregate_ci95_low);
         if (aggregate_ci95_high)
-            printf("CI95_high score = %f\n", aggregate_ci95_high);
+            printf("VMAF CI95_high score = %f\n", aggregate_ci95_high);
         if (aggregate_psnr)
             printf("PSNR score = %f\n", aggregate_psnr);
         if (aggregate_ssim)
@@ -1144,7 +1136,7 @@ double RunVmaf(int (*read_frame)(float *ref_data, float *main_data, float *temp_
     // determine number of bootstrap models (if any) and construct a comma-separated string of bootstrap vmaf model names
     for (size_t j=0; j<result_keys.size(); j++)
     {
-        if (result_keys[j].find(BOOSTRAP_VMAF_MODEL_PREFIX)!= std::string::npos)
+        if (result_keys[j].find(BOOSTRAP_VMAF_MODEL_KEY)!= std::string::npos)
         {
             if (num_bootstrap_models == 0)
             {
@@ -1157,12 +1149,6 @@ double RunVmaf(int (*read_frame)(float *ref_data, float *main_data, float *temp_
             else
             {
                 bootstrap_model_list_str += "," + result_keys[j];
-            }
-            if (vmafContext->pool_method) {
-                printf("VMAF score (%s), model %s = %f\n", vmafContext->pool_method, to_zero_lead(num_bootstrap_models + 1, BOOTSTRAP_MODEL_NAME_PRECISION).c_str(), result.get_score(result_keys[j]));
-            }
-            else {
-                printf("VMAF score, model %s = %f\n", to_zero_lead(num_bootstrap_models + 1, BOOTSTRAP_MODEL_NAME_PRECISION).c_str(), result.get_score(result_keys[j]));
             }
             num_bootstrap_models += 1;
         }

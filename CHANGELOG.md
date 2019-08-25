@@ -1,5 +1,12 @@
 # Change Log
 
+## (8/27/2019) [1.3.15]
+
+**New features:**
+- Support for multiple models ().
+- Libvmaf interface changes ().
+- Improved support for python3 (#332).
+
 ## (3/1/2019) [1.3.14]
 
 **Fixed bugs:**

@@ -605,7 +605,7 @@ class VmafossExecQualityRunner(QualityRunner):
     FEATURES = ['adm2', 'adm_scale0', 'adm_scale1', 'adm_scale2', 'adm_scale3',
                 'motion', 'vif_scale0', 'vif_scale1', 'vif_scale2',
                 'vif_scale3', 'vif', 'psnr', 'ssim', 'ms_ssim', 'motion2',
-                'bagging', 'stddev', 'ci95_low', 'ci95_high']
+                'vmaf_bagging', 'vmaf_stddev', 'vmaf_ci95_low', 'vmaf_ci95_high']
 
     @classmethod
     def get_feature_scores_key(cls, atom_feature):
@@ -684,6 +684,17 @@ class VmafossExecQualityRunner(QualityRunner):
             self.FEATURES += additional_models_dict.keys()
             # augment also with transformed scores
             self.FEATURES += map(lambda k: "{k}_transformed".format(k=k), additional_models_dict.keys())
+            if ci:
+                # if ci, augment feature set with bagging, stddev, ci95_low and ci95_high
+                self.FEATURES += map(lambda k: "{k}_bagging".format(k=k), additional_models_dict.keys())
+                self.FEATURES += map(lambda k: "{k}_stddev".format(k=k), additional_models_dict.keys())
+                self.FEATURES += map(lambda k: "{k}_ci95_low".format(k=k), additional_models_dict.keys())
+                self.FEATURES += map(lambda k: "{k}_ci95_high".format(k=k), additional_models_dict.keys())
+                # augment with transformed scores too
+                self.FEATURES += map(lambda k: "{k}_transformed_bagging".format(k=k), additional_models_dict.keys())
+                self.FEATURES += map(lambda k: "{k}_transformed_stddev".format(k=k), additional_models_dict.keys())
+                self.FEATURES += map(lambda k: "{k}_transformed_ci95_low".format(k=k), additional_models_dict.keys())
+                self.FEATURES += map(lambda k: "{k}_transformed_ci95_high".format(k=k), additional_models_dict.keys())
             # get json string for additional models
             additional_models = self.get_json_additional_model_string(additional_models_dict)
 
